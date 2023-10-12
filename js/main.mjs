@@ -3,19 +3,6 @@ import { paginateRest } from "https://esm.sh/@octokit/plugin-paginate-rest";
 
 const MyOctokit = Octokit.plugin(paginateRest);
 const octokit = new MyOctokit();
-
-function getQueryVariable(variable) {
-    var query = window.location.search.substring(1);
-    var vars = query.split("&");
-    for(var i = 0; i < vars.length; i++) {
-        var pair = vars[i].split("=");
-        if(pair[0] == variable) {
-            return pair[1];
-        }
-    }
-    return "";
-}
-
 // Validate the user input
 function validateInput() {
     if ($("#username").val().length > 0 && $("#repository").val().length > 0) {
@@ -210,8 +197,9 @@ $(function() {
         }
     });
 
-    var username = getQueryVariable("username");
-    var repository = getQueryVariable("repository");
+    const searchParams = new URLSearchParams(window.location.search);
+    const username = searchParams.get("username");
+    const repository = searchParams.get("repository");
 
     if(username != "" && repository != "") {
         $("#username").val(username);
