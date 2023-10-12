@@ -1,4 +1,8 @@
-var apiRoot = "https://api.github.com/";
+import { Octokit } from "https://esm.sh/@octokit/core";
+import { paginateRest } from "https://esm.sh/@octokit/plugin-paginate-rest";
+
+const MyOctokit = Octokit.plugin(paginateRest);
+const octokit = new MyOctokit();
 
 function getQueryVariable(variable) {
     var query = window.location.search.substring(1);
@@ -30,47 +34,24 @@ $(document).ready(function() {
 
 // Callback function for getting user repositories
 function getUserRepos() {
-    var user = $("#username").val();
+    var username = $("#username").val();
 
     var autoComplete = $('#repository').typeahead();
     var repoNames = [];
 
-    var url = apiRoot + "users/" + user + "/repos";
-    $.getJSON(url, function(data) {
-        $.each(data, function(index, item) {
-            repoNames.push(item.name);
-        });
-    });
+    octokit.paginate("GET /users/{username}/repos", { username }).then(data => {
+        for (const datum of data)
+            repoNames.push(datum.name);
+    })
 
     autoComplete.data('typeahead').source = repoNames;
 }
 
 // Display the stats
 function showStats(data) {
+    let html = '';
 
-    var err = false;
-    var errMessage = '';
-
-    if(data.status == 404) {
-        err = true;
-        errMessage = "The project does not exist!";
-    }
-
-    if(data.status == 403) {
-        err = true;
-        errMessage = "You've exceeded GitHub's rate limiting.<br />Please try again in about an hour.";
-    }
-
-    if(data.length == 0) {
-        err = true;
-        errMessage = "There are no releases for this project";
-    }
-
-    var html = '';
-
-    if(err) {
-        html = "<div class='col-md-6 col-md-offset-3 error output'>" + errMessage + "</div>";
-    } else {
+    {
         html += "<div class='col-md-6 col-md-offset-3 output'>";
         var latest = true;
         var totalDownloadCount = 0;
@@ -174,13 +155,38 @@ function showStats(data) {
     resultDiv.slideDown();
 }
 
+function showError(errMessage) {
+    const html = "<div class='col-md-6 col-md-offset-3 error output'>" + errMessage + "</div>";
+    const resultDiv = $("#stats-result");
+    resultDiv.hide();
+    resultDiv.html(html);
+    $("#loader-gif").hide();
+    resultDiv.slideDown();
+}
+
 // Callback function for getting release stats
-function getStats() {
+async function getStats() {
     var user = $("#username").val();
     var repository = $("#repository").val();
 
-    var url = apiRoot + "repos/" + user + "/" + repository + "/releases";
-    $.getJSON(url, showStats).fail(showStats);
+    const params = {owner: user, repo: repository, per_page: 100};
+    try {
+        const response = await octokit.paginate("GET /repos/{owner}/{repo}/releases", params);
+
+        if(response.length === 0) {
+            showError("There are no releases for this project");
+        } else {
+            showStats(response);
+        }
+    } catch (e) {
+        if (e.code === 404) {
+            showError("The project does not exist!");
+        } else if (e.code === 403) {
+            showError("You've exceeded GitHub's rate limiting.<br />Please try again in about an hour.");
+        } else {
+            showError("Unknown Response from GitHub: " + e.code);
+        }
+    }
 }
 
 // The main function
