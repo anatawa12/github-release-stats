@@ -21,17 +21,13 @@ $(document).ready(function() {
 
 // Callback function for getting user repositories
 function getUserRepos() {
-    var username = $("#username").val();
+    const username = $("#username").val();
 
-    var autoComplete = $('#repository').typeahead();
-    var repoNames = [];
+    const autoComplete = $('#repository').typeahead();
 
     octokit.paginate("GET /users/{username}/repos", { username }).then(data => {
-        for (const datum of data)
-            repoNames.push(datum.name);
+        autoComplete.data('typeahead').source = data.map(datum => datum.name);
     })
-
-    autoComplete.data('typeahead').source = repoNames;
 }
 
 // Display the stats
@@ -40,8 +36,8 @@ function showStats(data) {
 
     {
         html += "<div class='col-md-6 col-md-offset-3 output'>";
-        var latest = true;
-        var totalDownloadCount = 0;
+        let latest = true;
+        let totalDownloadCount = 0;
 
         // Set title to username/repository
         document.title = $("#username").val() + "/" + $("#repository").val() + " - " + document.title;
@@ -51,15 +47,15 @@ function showStats(data) {
             return (a.created_at < b.created_at) ? 1 : -1;
         });
 
-        $.each(data, function(index, item) {
-            var releaseTag = item.tag_name;
-            var releaseURL = item.html_url;
-            var releaseAssets = item.assets;
-            var hasAssets = releaseAssets.length != 0;
-            var releaseAuthor = item.author;
-            var hasAuthor = releaseAuthor != null;
-            var publishDate = item.published_at.split("T")[0];
-            var ReleaseDownloadCount = 0;
+        for (const item of data) {
+            const releaseTag = item.tag_name;
+            const releaseURL = item.html_url;
+            const releaseAssets = item.assets;
+            const hasAssets = releaseAssets.length !== 0;
+            const releaseAuthor = item.author;
+            const hasAuthor = releaseAuthor != null;
+            const publishDate = item.published_at.split("T")[0];
+            let ReleaseDownloadCount = 0;
 
             if(latest) {
                 html += "<div id='latest' class='row release latest-release'>" +
@@ -81,19 +77,18 @@ function showStats(data) {
                     "&nbsp&nbspDownload Info: </h4>";
                 downloadInfoHTML += "<ul>";
                 html += "<ul>";
-                $.each(releaseAssets, function(index, asset) {
+                for (let asset of releaseAssets) {
                     // Converts asset size to MiB, formatted to up to two decimal places. The number is also formatted based on client's browser locale (e.g. 3.1415 vs. 3,1415).
-                    var assetSize = (asset.size / 1048576.0).toLocaleString(undefined, {maximumFractionDigits: 2});
-                    var lastUpdate = asset.updated_at.split("T")[0];
+                    const assetSize = (asset.size / 1048576.0).toLocaleString(undefined, {maximumFractionDigits: 2});
+                    const lastUpdate = asset.updated_at.split("T")[0];
                     downloadInfoHTML += "<li><a href=\"" + asset.browser_download_url + "\">" + asset.name + "</a> (" + assetSize + " MiB)<br>" +
                         "<i>Last updated on " + lastUpdate + " &mdash; Downloaded " +
                         asset.download_count.toLocaleString(); // Download count number is formatted based on client's browser locale (e.g. 200 000 vs. 200,000).
-                    asset.download_count == 1 ? downloadInfoHTML += " time</i></li>" : downloadInfoHTML += " times</i></li>";
+                    asset.download_count === 1 ? downloadInfoHTML += " time</i></li>" : downloadInfoHTML += " times</i></li>";
                     totalDownloadCount += asset.download_count;
                     ReleaseDownloadCount += asset.download_count;
-                });
-            }
-            else {
+                }
+            } else {
                 downloadInfoHTML = "<center><i>This release has no download assets available!</i></center>"
             }
 
@@ -120,11 +115,11 @@ function showStats(data) {
             html += downloadInfoHTML;
 
             html += "</div>";
-        });
+        }
 
         if(totalDownloadCount > 0) {
             totalDownloadCount = totalDownloadCount.toLocaleString();
-            var totalHTML = "<div class='row total-downloads'>";
+            let totalHTML = "<div class='row total-downloads'>";
             totalHTML += "<h2><span class='glyphicon glyphicon-download'></span>" +
                 "&nbsp&nbspTotal Downloads</h2> ";
             totalHTML += "<span>" + totalDownloadCount + "</span>";
@@ -135,7 +130,7 @@ function showStats(data) {
         html += "</div>";
     }
 
-    var resultDiv = $("#stats-result");
+    const resultDiv = $("#stats-result");
     resultDiv.hide();
     resultDiv.html(html);
     $("#loader-gif").hide();
@@ -153,8 +148,8 @@ function showError(errMessage) {
 
 // Callback function for getting release stats
 async function getStats() {
-    var user = $("#username").val();
-    var repository = $("#repository").val();
+    const user = $("#username").val();
+    const repository = $("#repository").val();
 
     const params = {owner: user, repo: repository, per_page: 100};
     try {
@@ -191,7 +186,7 @@ $(function() {
     });
 
     $('#repository').on('keypress',function(e) {
-        if(e.which == 13) {
+        if(e.which === 13) {
             window.location = "?username=" + $("#username").val() +
             "&repository=" + $("#repository").val();
         }
@@ -201,7 +196,7 @@ $(function() {
     const username = searchParams.get("username");
     const repository = searchParams.get("repository");
 
-    if(username != "" && repository != "") {
+    if(username !== "" && repository !== "") {
         $("#username").val(username);
         $("#repository").val(repository);
         validateInput();
