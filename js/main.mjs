@@ -1,17 +1,8 @@
-var apiRoot = "https://api.github.com/";
+import { Octokit } from "https://esm.sh/@octokit/core";
+import { paginateRest } from "https://esm.sh/@octokit/plugin-paginate-rest";
 
-function getQueryVariable(variable) {
-    var query = window.location.search.substring(1);
-    var vars = query.split("&");
-    for(var i = 0; i < vars.length; i++) {
-        var pair = vars[i].split("=");
-        if(pair[0] == variable) {
-            return pair[1];
-        }
-    }
-    return "";
-}
-
+const MyOctokit = Octokit.plugin(paginateRest);
+const octokit = new MyOctokit();
 // Validate the user input
 function validateInput() {
     if ($("#username").val().length > 0 && $("#repository").val().length > 0) {
@@ -30,50 +21,23 @@ $(document).ready(function() {
 
 // Callback function for getting user repositories
 function getUserRepos() {
-    var user = $("#username").val();
+    const username = $("#username").val();
 
-    var autoComplete = $('#repository').typeahead();
-    var repoNames = [];
+    const autoComplete = $('#repository').typeahead();
 
-    var url = apiRoot + "users/" + user + "/repos";
-    $.getJSON(url, function(data) {
-        $.each(data, function(index, item) {
-            repoNames.push(item.name);
-        });
-    });
-
-    autoComplete.data('typeahead').source = repoNames;
+    octokit.paginate("GET /users/{username}/repos", { username }).then(data => {
+        autoComplete.data('typeahead').source = data.map(datum => datum.name);
+    })
 }
 
 // Display the stats
 function showStats(data) {
+    let html = '';
 
-    var err = false;
-    var errMessage = '';
-
-    if(data.status == 404) {
-        err = true;
-        errMessage = "The project does not exist!";
-    }
-
-    if(data.status == 403) {
-        err = true;
-        errMessage = "You've exceeded GitHub's rate limiting.<br />Please try again in about an hour.";
-    }
-
-    if(data.length == 0) {
-        err = true;
-        errMessage = "There are no releases for this project";
-    }
-
-    var html = '';
-
-    if(err) {
-        html = "<div class='col-md-6 col-md-offset-3 error output'>" + errMessage + "</div>";
-    } else {
+    {
         html += "<div class='col-md-6 col-md-offset-3 output'>";
-        var latest = true;
-        var totalDownloadCount = 0;
+        let latest = true;
+        let totalDownloadCount = 0;
 
         // Set title to username/repository
         document.title = $("#username").val() + "/" + $("#repository").val() + " - " + document.title;
@@ -83,15 +47,15 @@ function showStats(data) {
             return (a.created_at < b.created_at) ? 1 : -1;
         });
 
-        $.each(data, function(index, item) {
-            var releaseTag = item.tag_name;
-            var releaseURL = item.html_url;
-            var releaseAssets = item.assets;
-            var hasAssets = releaseAssets.length != 0;
-            var releaseAuthor = item.author;
-            var hasAuthor = releaseAuthor != null;
-            var publishDate = item.published_at.split("T")[0];
-            var ReleaseDownloadCount = 0;
+        for (const item of data) {
+            const releaseTag = item.tag_name;
+            const releaseURL = item.html_url;
+            const releaseAssets = item.assets;
+            const hasAssets = releaseAssets.length !== 0;
+            const releaseAuthor = item.author;
+            const hasAuthor = releaseAuthor != null;
+            const publishDate = item.published_at.split("T")[0];
+            let ReleaseDownloadCount = 0;
 
             if(latest) {
                 html += "<div id='latest' class='row release latest-release'>" +
@@ -113,19 +77,18 @@ function showStats(data) {
                     "&nbsp&nbspDownload Info: </h4>";
                 downloadInfoHTML += "<ul>";
                 html += "<ul>";
-                $.each(releaseAssets, function(index, asset) {
+                for (let asset of releaseAssets) {
                     // Converts asset size to MiB, formatted to up to two decimal places. The number is also formatted based on client's browser locale (e.g. 3.1415 vs. 3,1415).
-                    var assetSize = (asset.size / 1048576.0).toLocaleString(undefined, {maximumFractionDigits: 2});
-                    var lastUpdate = asset.updated_at.split("T")[0];
+                    const assetSize = (asset.size / 1048576.0).toLocaleString(undefined, {maximumFractionDigits: 2});
+                    const lastUpdate = asset.updated_at.split("T")[0];
                     downloadInfoHTML += "<li><a href=\"" + asset.browser_download_url + "\">" + asset.name + "</a> (" + assetSize + " MiB)<br>" +
                         "<i>Last updated on " + lastUpdate + " &mdash; Downloaded " +
                         asset.download_count.toLocaleString(); // Download count number is formatted based on client's browser locale (e.g. 200 000 vs. 200,000).
-                    asset.download_count == 1 ? downloadInfoHTML += " time</i></li>" : downloadInfoHTML += " times</i></li>";
+                    asset.download_count === 1 ? downloadInfoHTML += " time</i></li>" : downloadInfoHTML += " times</i></li>";
                     totalDownloadCount += asset.download_count;
                     ReleaseDownloadCount += asset.download_count;
-                });
-            }
-            else {
+                }
+            } else {
                 downloadInfoHTML = "<center><i>This release has no download assets available!</i></center>"
             }
 
@@ -152,11 +115,11 @@ function showStats(data) {
             html += downloadInfoHTML;
 
             html += "</div>";
-        });
+        }
 
         if(totalDownloadCount > 0) {
             totalDownloadCount = totalDownloadCount.toLocaleString();
-            var totalHTML = "<div class='row total-downloads'>";
+            let totalHTML = "<div class='row total-downloads'>";
             totalHTML += "<h2><span class='glyphicon glyphicon-download'></span>" +
                 "&nbsp&nbspTotal Downloads</h2> ";
             totalHTML += "<span>" + totalDownloadCount + "</span>";
@@ -167,7 +130,16 @@ function showStats(data) {
         html += "</div>";
     }
 
-    var resultDiv = $("#stats-result");
+    const resultDiv = $("#stats-result");
+    resultDiv.hide();
+    resultDiv.html(html);
+    $("#loader-gif").hide();
+    resultDiv.slideDown();
+}
+
+function showError(errMessage) {
+    const html = "<div class='col-md-6 col-md-offset-3 error output'>" + errMessage + "</div>";
+    const resultDiv = $("#stats-result");
     resultDiv.hide();
     resultDiv.html(html);
     $("#loader-gif").hide();
@@ -175,12 +147,28 @@ function showStats(data) {
 }
 
 // Callback function for getting release stats
-function getStats() {
-    var user = $("#username").val();
-    var repository = $("#repository").val();
+async function getStats() {
+    const user = $("#username").val();
+    const repository = $("#repository").val();
 
-    var url = apiRoot + "repos/" + user + "/" + repository + "/releases";
-    $.getJSON(url, showStats).fail(showStats);
+    const params = {owner: user, repo: repository, per_page: 100};
+    try {
+        const response = await octokit.paginate("GET /repos/{owner}/{repo}/releases", params);
+
+        if(response.length === 0) {
+            showError("There are no releases for this project");
+        } else {
+            showStats(response);
+        }
+    } catch (e) {
+        if (e.code === 404) {
+            showError("The project does not exist!");
+        } else if (e.code === 403) {
+            showError("You've exceeded GitHub's rate limiting.<br />Please try again in about an hour.");
+        } else {
+            showError("Unknown Response from GitHub: " + e.code);
+        }
+    }
 }
 
 // The main function
@@ -198,16 +186,17 @@ $(function() {
     });
 
     $('#repository').on('keypress',function(e) {
-        if(e.which == 13) {
+        if(e.which === 13) {
             window.location = "?username=" + $("#username").val() +
             "&repository=" + $("#repository").val();
         }
     });
 
-    var username = getQueryVariable("username");
-    var repository = getQueryVariable("repository");
+    const searchParams = new URLSearchParams(window.location.search);
+    const username = searchParams.get("username");
+    const repository = searchParams.get("repository");
 
-    if(username != "" && repository != "") {
+    if(username !== "" && repository !== "") {
         $("#username").val(username);
         $("#repository").val(repository);
         validateInput();
